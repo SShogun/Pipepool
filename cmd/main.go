@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Pipepool/internal/app"
 	. "Pipepool/internal/app"
 	. "Pipepool/internal/logging"
 	"context"
@@ -13,4 +14,10 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.RunTimeout)
 	defer cancel()
 
+	summary, err := app.Run(ctx, cfg, logger)
+	if err != nil {
+		logger.Error("Error running app", "error", err)
+		return
+	}
+	logger.Info("App run completed", "summary", summary)
 }

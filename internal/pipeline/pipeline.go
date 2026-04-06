@@ -5,6 +5,6 @@ import (
 	"context"
 )
 
-func Run(ctx context.Context, jobs <-chan Job, results chan<- Result) {
+func Run(ctx context.Context, jobs <-chan Job) {
 
 }
