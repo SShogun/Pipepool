@@ -9,12 +9,11 @@ import (
 )
 
 func Run(ctx context.Context, cfg *Config, logger *slog.Logger) (Summary, error) {
-	jobs := make(chan Job, cfg.QueueSize)
+	jobs := make(chan Job)
 	results := make(chan Result)
+	queuedJobs := pipeline.Run(ctx, jobs, cfg.QueueSize)
 
-	go pipeline.Run(ctx, jobs)
-	go pipeline.Run(ctx, jobs)
-	go pool.Run(ctx, jobs, results)
+	go pool.Run(ctx, queuedJobs, results)
 	summary := Summary{}.Collect(ctx, results)
 
 	return summary.(Summary), nil
