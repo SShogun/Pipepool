@@ -1,13 +1,9 @@
 package app
 
-import "time"
-
-type Config struct {
-	WorkerCount   int
-	QueueSize     int
-	RunTimeout    time.Duration
-	PerJobTimeout time.Duration
-}
+import (
+	. "Pipepool/internal/types"
+	"time"
+)
 
 func LoadConfig(w, q int, rt, pjt time.Duration) *Config {
 	return &Config{

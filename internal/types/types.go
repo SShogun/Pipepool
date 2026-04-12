@@ -1,9 +1,15 @@
 package types
 
 import (
-	"context"
 	"time"
 )
+
+type Config struct {
+	WorkerCount   int
+	QueueSize     int
+	RunTimeout    time.Duration
+	PerJobTimeout time.Duration
+}
 
 type Job struct {
 	ID    int
@@ -11,23 +17,23 @@ type Job struct {
 }
 
 type Result struct {
-	ID     int
-	Output string
+	ID        int
+	Output    string
+	Valid     bool
+	WordCount int
+	LineCount int
+	Duration  time.Duration
+	Err       error
 }
 
 type Summary struct {
-	TotalJobs    int
-	SuccessCount int
-	FailureCount int
-
+	TotalJobs     int
+	SuccessCount  int
+	FailureCount  int
+	TotalWords    int
+	TotalLines    int
 	TotalDuration time.Duration
-
-	SlowestJobID int
-	MaxDuration  time.Duration
-
-	Errors []error
-}
-
-func (s Summary) Collect(ctx context.Context, results chan Result) any {
-	panic("unimplemented")
+	SlowestJobID  int
+	MaxDuration   time.Duration
+	Errors        []error
 }
