@@ -2,22 +2,63 @@ package pool
 
 import (
 	"Pipepool/internal/pipeline"
-	. "Pipepool/internal/types"
+	"Pipepool/internal/types"
 	"context"
+	"io"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 )
 
-func Run(ctx context.Context, jobs <-chan pipeline.Item, cfg *Config) <-chan Result {
-	var wg sync.WaitGroup
-	results := make(chan Result, cfg.QueueSize)
+type processorFunc func(ctx context.Context, item pipeline.Item, workerID int) types.Result
 
-	for i := 0; i < cfg.WorkerCount; i++ {
+const (
+	defaultWorkerCount   = 1
+	defaultQueueSize     = 1
+	defaultPerJobTimeout = 250 * time.Millisecond
+	defaultProcessDelay  = 25 * time.Millisecond
+)
+
+func Run(ctx context.Context, jobs <-chan pipeline.Item, cfg *types.Config, logger *slog.Logger) <-chan types.Result {
+	return runWithProcessor(ctx, jobs, cfg, logger, processOne)
+}
+
+func runWithProcessor(ctx context.Context, jobs <-chan pipeline.Item, cfg *types.Config, logger *slog.Logger, process processorFunc) <-chan types.Result {
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	if process == nil {
+		process = processOne
+	}
+
+	workerCount := defaultWorkerCount
+	queueSize := defaultQueueSize
+	perJobTimeout := defaultPerJobTimeout
+	if cfg != nil {
+		if cfg.WorkerCount > 0 {
+			workerCount = cfg.WorkerCount
+		}
+		if cfg.QueueSize > 0 {
+			queueSize = cfg.QueueSize
+		}
+		if cfg.PerJobTimeout > 0 {
+			perJobTimeout = cfg.PerJobTimeout
+		}
+	}
+
+	var wg sync.WaitGroup
+	results := make(chan types.Result, queueSize)
+	logger.InfoContext(ctx, "pool lifecycle", "component", "pool", "state", "start", "worker_count", workerCount)
+
+	for i := 0; i < workerCount; i++ {
+		workerID := i + 1
 		wg.Add(1)
 
 		go func() {
 			defer wg.Done()
+			logger.InfoContext(ctx, "pool lifecycle", "component", "pool", "state", "worker_started", "worker_id", workerID)
+			defer logger.InfoContext(ctx, "pool lifecycle", "component", "pool", "state", "worker_stopped", "worker_id", workerID)
 
 			for {
 				select {
@@ -28,14 +69,17 @@ func Run(ctx context.Context, jobs <-chan pipeline.Item, cfg *Config) <-chan Res
 						return
 					}
 
-					jobCtx, cancel := context.WithTimeout(ctx, cfg.PerJobTimeout)
-					result := process(jobCtx, item)
+					logger.InfoContext(ctx, "pool lifecycle", "component", "pool", "state", "worker_received", "worker_id", workerID, "job_id", item.ID)
+
+					jobCtx, cancel := context.WithTimeout(ctx, perJobTimeout)
+					result := process(jobCtx, item, workerID)
 					cancel()
 
 					select {
 					case <-ctx.Done():
 						return
 					case results <- result:
+						logger.InfoContext(ctx, "pool lifecycle", "component", "pool", "state", "worker_finished", "worker_id", workerID, "job_id", result.ID, "duration", result.Duration)
 					}
 				}
 			}
@@ -45,16 +89,18 @@ func Run(ctx context.Context, jobs <-chan pipeline.Item, cfg *Config) <-chan Res
 	go func() {
 		wg.Wait()
 		close(results)
+		logger.InfoContext(ctx, "pool lifecycle", "component", "pool", "state", "stop")
 	}()
 
 	return results
 }
 
-func process(ctx context.Context, item pipeline.Item) Result {
+func processOne(ctx context.Context, item pipeline.Item, workerID int) types.Result {
+	_ = workerID
 	start := time.Now()
 
 	if !item.Valid {
-		return Result{
+		return types.Result{
 			ID:       item.ID,
 			Valid:    item.Valid,
 			Duration: time.Since(start),
@@ -63,14 +109,14 @@ func process(ctx context.Context, item pipeline.Item) Result {
 
 	select {
 	case <-ctx.Done():
-		return Result{
+		return types.Result{
 			ID:       item.ID,
 			Valid:    item.Valid,
 			Duration: time.Since(start),
 			Err:      ctx.Err(),
 		}
-	case <-time.After(10 * time.Millisecond):
-		return Result{
+	case <-time.After(defaultProcessDelay):
+		return types.Result{
 			ID:        item.ID,
 			Output:    item.Input + "_processed",
 			Valid:     item.Valid,

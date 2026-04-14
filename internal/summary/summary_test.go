@@ -1,7 +1,8 @@
 package summary
 
 import (
-	. "Pipepool/internal/types"
+	"Pipepool/internal/testutil"
+	"Pipepool/internal/types"
 	"context"
 	"errors"
 	"testing"
@@ -9,15 +10,15 @@ import (
 )
 
 func TestCollectAggregatesResults(t *testing.T) {
-	results := make(chan Result, 3)
+	results := make(chan types.Result, 3)
 	workerErr := errors.New("worker failed")
 
-	results <- Result{ID: 1, Valid: true, WordCount: 2, LineCount: 1, Duration: 10 * time.Millisecond}
-	results <- Result{ID: 2, Valid: false, Duration: 20 * time.Millisecond}
-	results <- Result{ID: 3, Valid: true, WordCount: 4, LineCount: 2, Duration: 5 * time.Millisecond, Err: workerErr}
+	results <- types.Result{ID: 1, Valid: true, WordCount: 2, LineCount: 1, Duration: 10 * time.Millisecond}
+	results <- types.Result{ID: 2, Valid: false, Duration: 20 * time.Millisecond}
+	results <- types.Result{ID: 3, Valid: true, WordCount: 4, LineCount: 2, Duration: 5 * time.Millisecond, Err: workerErr}
 	close(results)
 
-	summary := Collect(context.Background(), results)
+	summary := Collect(context.Background(), results, testutil.NewDiscardLogger())
 
 	if summary.TotalJobs != 3 {
 		t.Fatalf("TotalJobs = %d, want 3", summary.TotalJobs)
@@ -55,8 +56,8 @@ func TestCollectReturnsOnContextDone(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	results := make(chan Result)
-	summary := Collect(ctx, results)
+	results := make(chan types.Result)
+	summary := Collect(ctx, results, testutil.NewDiscardLogger())
 
 	if len(summary.Errors) != 1 {
 		t.Fatalf("len(Errors) = %d, want 1", len(summary.Errors))

@@ -2,19 +2,23 @@ package main
 
 import (
 	"Pipepool/internal/app"
-	. "Pipepool/internal/app"
-	. "Pipepool/internal/logging"
+	"Pipepool/internal/logging"
 	"context"
 	"time"
 )
 
 func main() {
-	cfg := LoadConfig(5, 100, 4*time.Second, 16*time.Second) // or however you initialize your Config struct
-	logger := LoadLogger()                                   // or however you initialize your Logger
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.RunTimeout)
-	defer cancel()
+	cfg := app.LoadConfig(4, 2, 5*time.Second, 500*time.Millisecond)
+	logger := logging.LoadLogger()
+	ctx := context.Background()
+	inputs := []string{
+		"  alpha beta  ",
+		"",
+		"line one\r\nline two",
+		"go concurrency is fun",
+	}
 
-	summary, err := app.Run(ctx, cfg, logger)
+	summary, err := app.Run(ctx, cfg, inputs, logger)
 	if err != nil {
 		logger.Error("Error running app", "error", err)
 		return

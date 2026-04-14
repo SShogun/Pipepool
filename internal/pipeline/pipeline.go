@@ -1,14 +1,19 @@
 package pipeline
 
 import (
-	. "Pipepool/internal/types"
 	"context"
+	"io"
+	"log/slog"
 )
 
-func Run(ctx context.Context, jobs <-chan Job, queueSize int) <-chan Item {
-	ingested := ingest(ctx, jobs)
-	normalized := normalize(ctx, ingested)
-	validated := validate(ctx, normalized)
+func Run(ctx context.Context, inputs []string, queueSize int, logger *slog.Logger) <-chan Item {
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
 
-	return queue(ctx, validated, queueSize)
+	ingested := ingest(ctx, inputs, logger)
+	normalized := normalize(ctx, ingested, logger)
+	validated := validate(ctx, normalized, logger)
+
+	return queue(ctx, validated, queueSize, logger)
 }
